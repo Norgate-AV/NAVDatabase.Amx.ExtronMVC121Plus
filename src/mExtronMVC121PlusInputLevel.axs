@@ -1,6 +1,6 @@
 MODULE_NAME='mExtronMVC121PlusInputLevel'	(
                                                 dev vdvObject,
-                                                dev vdvControl
+                                                dev vdvCommObject
                                             )
 
 (***********************************************************)
@@ -101,8 +101,8 @@ DEFINE_MUTUALLY_EXCLUSIVE
 (* EXAMPLE: DEFINE_FUNCTION <RETURN_TYPE> <NAME> (<PARAMETERS>) *)
 (* EXAMPLE: DEFINE_CALL '<NAME>' (<PARAMETERS>) *)
 define_function SendCommand(char cParam[]) {
-     NAVLog("'Command to ',NAVStringSurroundWith(NAVDeviceToString(vdvControl), '[', ']'),': [',cParam,']'")
-    send_command vdvControl,"cParam"
+     NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'Command to ',NAVStringSurroundWith(NAVDeviceToString(vdvObject), '[', ']'),': [',cParam,']'")
+    send_command vdvObject,"cParam"
 }
 
 define_function BuildCommand(char cHeader[], char cCmd[]) {
@@ -127,7 +127,7 @@ define_function Register() {
     }
 
     if (iID) { BuildCommand('REGISTER',"cObjectTag[1],'*',cObjectTag[2]") }
-    NAVLog("'EXTRON_DMP_REGISTER<',itoa(iID),'>'")
+    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'EXTRON_DMP_REGISTER<',itoa(iID),'>'")
 }
 
 define_function Process() {
@@ -136,7 +136,7 @@ define_function Process() {
     while (length_array(cRxBuffer) && NAVContains(cRxBuffer,'>')) {
 	cTemp = remove_string(cRxBuffer,"'>'",1)
 	if (length_array(cTemp)) {
-	    NAVLog("'Parsing String From ',NAVStringSurroundWith(NAVDeviceToString(vdvControl), '[', ']'),': [',cTemp,']'")
+	    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'Parsing String From ',NAVStringSurroundWith(NAVDeviceToString(vdvObject), '[', ']'),': [',cTemp,']'")
 	    if (NAVContains(cRxBuffer, cTemp)) { cRxBuffer = "''" }
 	    select {
 		active (NAVStartsWith(cTemp,'REGISTER')): {
@@ -146,18 +146,18 @@ define_function Process() {
 			Register()
 		    }
 
-		    NAVLog("'EXTRON_DMP_REGISTER_REQUESTED<',itoa(iID),'>'")
+		    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'EXTRON_DMP_REGISTER_REQUESTED<',itoa(iID),'>'")
 		}
 		active (NAVStartsWith(cTemp,'INIT')): {
-		    //NAVLog("'Request to Init'")
+		    //NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'Request to Init'")
 		    iIsInitialized = false
 		    GetInitialized()
-		    NAVLog("'EXTRON_DMP_INIT_REQUESTED<',itoa(iID),'>'")
+		    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'EXTRON_DMP_INIT_REQUESTED<',itoa(iID),'>'")
 		}
 		active (NAVStartsWith(cTemp,'RESPONSE_MSG')): {
 		    //stack_var char cResponseRequestMess[NAV_MAX_BUFFER]
 		    stack_var char cResponseMess[NAV_MAX_BUFFER]
-		    NAVLog("'Response message: ',cTemp")
+		    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'Response message: ',cTemp")
 		    //cResponseRequestMess = NAVGetStringBetween(cTemp,'<','|')
 		    cResponseMess = NAVGetStringBetween(cTemp,'<','>')
 		    //BuildCommand('RESPONSE_OK',cResponseRequestMess)
@@ -172,17 +172,17 @@ define_function Process() {
 			    if (!iIsInitialized) {
 				iIsInitialized = true
 				BuildCommand('INIT_DONE','')
-				NAVLog("'EXTRON_DMP_INIT_DONE<',itoa(iID),'>'")
+				NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'EXTRON_DMP_INIT_DONE<',itoa(iID),'>'")
 			    }
 			}
 			active (NAVContains(cResponseMess,cObjectTag[2])): {
-			    NAVLog("'EXTRON_DMP_FOUND_SOFT_LIMIT_RESPONSE<',itoa(iID),'>'")
+			    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'EXTRON_DMP_FOUND_SOFT_LIMIT_RESPONSE<',itoa(iID),'>'")
 			    //if (NAVContains(cResponseMess,'OK>')) {
 				remove_string(cResponseMess,"cObjectTag[2],'*'",1)
 				siMaxLevel = atoi(NAVStripCharsFromRight(remove_string(cResponseMess,'*',1),1))
-				NAVLog("'EXTRON_DMP_MAX_LEVEL<',itoa(siMaxLevel),'>'")
+				NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'EXTRON_DMP_MAX_LEVEL<',itoa(siMaxLevel),'>'")
 				siMinLevel = atoi(cResponseMess)
-				NAVLog("'EXTRON_DMP_MIN_LEVEL<',itoa(siMinLevel),'>'")
+				NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'EXTRON_DMP_MIN_LEVEL<',itoa(siMinLevel),'>'")
 				send_level vdvObject,1,NAVScaleValue((uVolume.Level.Actual - siMinLevel),(siMaxLevel - siMinLevel),255,0)
 			    //}
 			}
@@ -240,14 +240,14 @@ define_function char[NAV_MAX_BUFFER] BuildString(char cAtt[], char cIndex1[], ch
 (*                STARTUP CODE GOES BELOW                  *)
 (***********************************************************)
 DEFINE_START
-create_buffer vdvControl,cRxBuffer
+create_buffer vdvObject,cRxBuffer
 iModuleEnabled = true
 rebuild_event()
 (***********************************************************)
 (*                THE EVENTS GO BELOW                      *)
 (***********************************************************)
 DEFINE_EVENT
-data_event[vdvControl] {
+data_event[vdvCommObject] {
     string: {
 	if (iModuleEnabled) {
 	    if (!iSemaphore) {
@@ -259,13 +259,13 @@ data_event[vdvControl] {
 
 data_event[vdvObject] {
     online: {
-	//send_command vdvControl,"'READY'"
+	//send_command vdvObject,"'READY'"
     }
     command: {
         stack_var char cCmdHeader[NAV_MAX_CHARS]
 	stack_var char cCmdParam[2][NAV_MAX_CHARS]
 	if (iModuleEnabled) {
-	     NAVLog("'Command from ',NAVStringSurroundWith(NAVDeviceToString(data.device), '[', ']'),': [',data.text,']'")
+	     NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'Command from ',NAVStringSurroundWith(NAVDeviceToString(data.device), '[', ']'),': [',data.text,']'")
 	    cCmdHeader = DuetParseCmdHeader(data.text)
 	    cCmdParam[1] = DuetParseCmdParam(data.text)
 	    cCmdParam[2] = DuetParseCmdParam(data.text)
@@ -376,12 +376,12 @@ define_event channel_event[vdvObject,0] {
 	    switch (channel.channel) {
 		case VOL_UP: {
 		    if (iIsInitialized) {
-			timeline_create(TL_DRIVE,ltDrive,length_array(ltDrive),TIMELINE_ABSOLUTE,TIMELINE_REPEAT)
+			NAVTimelineStart(TL_DRIVE,ltDrive,TIMELINE_ABSOLUTE,TIMELINE_REPEAT)
 		    }
 		}
 		case VOL_DN: {
 		    if (iIsInitialized) {
-			timeline_create(TL_DRIVE,ltDrive,length_array(ltDrive),TIMELINE_ABSOLUTE,TIMELINE_REPEAT)
+			NAVTimelineStart(TL_DRIVE,ltDrive,TIMELINE_ABSOLUTE,TIMELINE_REPEAT)
 		    }
 		}
 	    }
@@ -413,14 +413,6 @@ timeline_event[TL_DRIVE] {
     }
 }
 
-(***********************************************************)
-(*            THE ACTUAL PROGRAM GOES BELOW                *)
-(***********************************************************)
-DEFINE_PROGRAM {
-    if (iModuleEnabled) {
-
-    }
-}
 
 (***********************************************************)
 (*                     END OF PROGRAM                      *)

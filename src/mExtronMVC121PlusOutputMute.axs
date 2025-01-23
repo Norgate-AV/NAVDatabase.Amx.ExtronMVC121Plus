@@ -1,6 +1,6 @@
 MODULE_NAME='mExtronMVC121PlusOutputMute'	(
                                                 dev vdvObject,
-                                                dev vdvControl
+                                                dev vdvCommObject
                                             )
 
 (***********************************************************)
@@ -98,8 +98,8 @@ DEFINE_MUTUALLY_EXCLUSIVE
 (* EXAMPLE: DEFINE_FUNCTION <RETURN_TYPE> <NAME> (<PARAMETERS>) *)
 (* EXAMPLE: DEFINE_CALL '<NAME>' (<PARAMETERS>) *)
 define_function SendCommand(char cParam[]) {
-     NAVLog("'Command to ',NAVStringSurroundWith(NAVDeviceToString(vdvControl), '[', ']'),': [',cParam,']'")
-    send_command vdvControl,"cParam"
+     NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'Command to ',NAVStringSurroundWith(NAVDeviceToString(vdvCommObject), '[', ']'),': [',cParam,']'")
+    send_command vdvCommObject,"cParam"
 }
 
 define_function BuildCommand(char cHeader[], char cCmd[]) {
@@ -114,7 +114,7 @@ define_function Register() {
     iRegistered = true
     cObjectTag[1] = 'Amt'
     if (iID) { BuildCommand('REGISTER',cObjectTag[1]) }
-    NAVLog("'EXTRON_MVC_REGISTER<',itoa(iID),'>'")
+    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'EXTRON_MVC_REGISTER<',itoa(iID),'>'")
 }
 
 define_function Process() {
@@ -123,7 +123,7 @@ define_function Process() {
     while (length_array(cRxBuffer) && NAVContains(cRxBuffer,'>')) {
 	cTemp = remove_string(cRxBuffer,"'>'",1)
 	if (length_array(cTemp)) {
-	    NAVLog("'Parsing String From ',NAVStringSurroundWith(NAVDeviceToString(vdvControl), '[', ']'),': [',cTemp,']'")
+	    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'Parsing String From ',NAVStringSurroundWith(NAVDeviceToString(vdvCommObject), '[', ']'),': [',cTemp,']'")
 	    if (NAVContains(cRxBuffer, cTemp)) { cRxBuffer = "''" }
 	    select {
 		active (NAVStartsWith(cTemp,'REGISTER')): {
@@ -133,12 +133,12 @@ define_function Process() {
 			Register()
 		    }
 
-		    NAVLog("'EXTRON_MVC_REGISTER_REQUESTED<',itoa(iID),'>'")
+		    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'EXTRON_MVC_REGISTER_REQUESTED<',itoa(iID),'>'")
 		}
 		active (NAVStartsWith(cTemp,'INIT')): {
 		    iIsInitialized = false
 		    GetInitialized()
-		    NAVLog("'EXTRON_MVC_INIT_REQUESTED<',itoa(iID),'>'")
+		    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'EXTRON_MVC_INIT_REQUESTED<',itoa(iID),'>'")
 		}
 		active (NAVStartsWith(cTemp,'RESPONSE_MSG')): {
 		    //stack_var char cResponseRequestMess[NAV_MAX_BUFFER]
@@ -150,10 +150,10 @@ define_function Process() {
 			active (NAVContains(cResponseMess,cObjectTag[1])): {
 			    //if (NAVContains(cResponseMess,'OK>')) {
 				remove_string(cResponseMess,"cObjectTag[1]",1)
-				NAVLog("'DMP_MVC_OUTPUT_MUTE_RESPONSE_MESSSAGE<',cResponseMess,'>'")
+				NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'DMP_MVC_OUTPUT_MUTE_RESPONSE_MESSSAGE<',cResponseMess,'>'")
 				uVolume.Mute.Actual = atoi(cResponseMess)
 
-				NAVLog("'DMP_MVC_OUTPUT_MUTE_ACTUAL_MUTE<',itoa(uVolume.Mute.Actual),'>'")
+				NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'DMP_MVC_OUTPUT_MUTE_ACTUAL_MUTE<',itoa(uVolume.Mute.Actual),'>'")
 
 				/*
 				switch (cAtt) {
@@ -189,7 +189,7 @@ define_function Process() {
 			    if (!iIsInitialized) {
 				iIsInitialized = true
 				BuildCommand('INIT_DONE','')
-				NAVLog("'EXTRON_MVC_INIT_DONE<',itoa(iID),'>'")
+				NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'EXTRON_MVC_INIT_DONE<',itoa(iID),'>'")
 			    }
 			}
 		    }
@@ -223,14 +223,14 @@ define_function char[NAV_MAX_BUFFER] BuildString(char cAtt[], char cIndex1[], ch
 (*                STARTUP CODE GOES BELOW                  *)
 (***********************************************************)
 DEFINE_START
-create_buffer vdvControl,cRxBuffer
+create_buffer vdvCommObject,cRxBuffer
 iModuleEnabled = true
 rebuild_event()
 (***********************************************************)
 (*                THE EVENTS GO BELOW                      *)
 (***********************************************************)
 DEFINE_EVENT
-data_event[vdvControl] {
+data_event[vdvCommObject] {
     string: {
 	if (iModuleEnabled) {
 	    if (!iSemaphore) {
@@ -242,13 +242,13 @@ data_event[vdvControl] {
 
 data_event[vdvObject] {
     online: {
-	//send_command vdvControl,"'READY'"
+	//send_command vdvObject,"'READY'"
     }
     command: {
         stack_var char cCmdHeader[NAV_MAX_CHARS]
 	stack_var char cCmdParam[2][NAV_MAX_CHARS]
 	if (iModuleEnabled) {
-	     NAVLog(NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_COMMAND_FROM, data.device, data.text))
+	     NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_COMMAND_FROM, data.device, data.text))
 	    cCmdHeader = DuetParseCmdHeader(data.text)
 	    cCmdParam[1] = DuetParseCmdParam(data.text)
 	    cCmdParam[2] = DuetParseCmdParam(data.text)
@@ -312,7 +312,7 @@ define_event channel_event[vdvObject,0] {
 	if (iModuleEnabled) {
 	    switch (channel.channel) {
 		case VOL_MUTE: {
-		    NAVLog("'DMP_MVC_OBJECT_MUTE_TOGGLE<',itoa(iID),'>'")
+		    NAVErrorLog(NAV_LOG_LEVEL_DEBUG, "'DMP_MVC_OBJECT_MUTE_TOGGLE<',itoa(iID),'>'")
 		    if (uVolume.Mute.Actual) {
 			BuildCommand('COMMAND_MSG',BuildString('0Z','',''))
 		    }else {
@@ -328,15 +328,10 @@ define_event channel_event[vdvObject,0] {
 }
 
 
-(***********************************************************)
-(*            THE ACTUAL PROGRAM GOES BELOW                *)
-(***********************************************************)
-DEFINE_PROGRAM {
-    if (iModuleEnabled) {
-	//NAVLog("'DMP_STATE_OBJECT_MAIN_LINE<',itoa(iID),'>'")
-	[vdvObject,VOL_MUTE_FB]	= (uVolume.Mute.Actual)
-    }
+timeline_event[TL_NAV_FEEDBACK] {
+    [vdvObject,VOL_MUTE_FB]	= (uVolume.Mute.Actual)
 }
+
 
 (***********************************************************)
 (*                     END OF PROGRAM                      *)
